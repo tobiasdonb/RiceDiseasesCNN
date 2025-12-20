@@ -1,4 +1,4 @@
-# ricedisease_classifier
+# riceleafdisease_classifier
 
 I would like to present my portfolio project based on capstone project in Dicoding bootcamp, a CNN-based classification model to classify a rice leaf diseases image 
 
