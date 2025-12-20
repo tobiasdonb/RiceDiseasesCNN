@@ -1,0 +1,9 @@
+BacterialLeafBlight
+BrownSpot
+Healthy
+Hispa
+Leaf_Blast
+Leaf_scald
+Neck_blast
+Sheath_blight
+Tungro
