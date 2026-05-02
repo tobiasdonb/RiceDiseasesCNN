@@ -1,16 +1,18 @@
-# ricedisease_classifier
+# riceleafdisease_classifier
 
-A new Flutter project.
+I would like to present my portfolio project based on capstone project in Dicoding bootcamp, a CNN-based classification model to classify a rice leaf diseases image 
 
-## Getting Started
+Data: Rice leaf disease dataset collected from several publishers on Kaggle The dataset contains 9 labels (1 healty leaf and 8 rice diseases)
 
-This project is a starting point for a Flutter application.
 
-A few resources to get you started if this is your first Flutter project:
+Data sources :
+https://www.kaggle.com/datasets/loki4514/rice-leaf-diseases-detection
+https://www.kaggle.com/datasets/minhhuy2810/rice-diseases-image-dataset
+https://www.kaggle.com/datasets/nirmalsankalana/rice-leaf-disease-image
+https://www.kaggle.com/datasets/vbookshelf/rice-leaf-diseases
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+I've already aggregrated the datasets: https://drive.google.com/drive/folders/1paca0i8wcqNaRiPyyQszeQJruoS3At9c?usp=sharing
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+
+The model is also export to tflite format for deployment in Flutter-based android mobile app
+
