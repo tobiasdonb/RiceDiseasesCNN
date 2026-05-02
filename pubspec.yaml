@@ -60,8 +60,8 @@ flutter:
   # the material Icons class.
   uses-material-design: true
   assets:
-    - Assets/model_padi.tflite
-    - Assets/labels.txt
+    - assets/model_padi.tflite
+    - assets/labels.txt
 
   # To add assets to your application, add an assets section, like this:
   # assets:

@@ -1,135 +1,210 @@
 import 'dart:io';
-import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:image_cropper/image_cropper.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
+import 'package:image_cropper/image_cropper.dart';
 import 'package:image/image.dart' as img;
 
-void main() => runApp(const MyApp());
+void main() {
+  runApp(const MyApp());
+}
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      title: 'Rice Diseases Classification',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(primarySwatch: Colors.green, useMaterial3: true),
-      home: const HomePage(),
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.green),
+        useMaterial3: true,
+      ),
+      home: const MyHomePage(),
     );
   }
 }
 
-class HomePage extends StatefulWidget {
-  const HomePage({super.key});
+class MyHomePage extends StatefulWidget {
+  const MyHomePage({super.key});
+
   @override
-  State<HomePage> createState() => _HomePageState();
+  _MyHomePageState createState() => _MyHomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
-  Interpreter? interpreter;
-  List<String> labels = [];
-  File? imageFile;
-  String predictionText = "Belum ada prediksi";
-  bool isLoading = false;
+class _MyHomePageState extends State<MyHomePage> {
+  File? _image;                     // Object untuk menyimpan file foto
+  Interpreter? _interpreter;        // Object mesin TFLite
+  List<String> _labels = [];        // Tempat menyimpan nama-nama penyakit
+  String _hasilPrediksi = "Belum ada prediksi";
+  bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
-    loadModel();
+    _loadModel(); // Perbaikan typo: _LoadModel -> _loadModel
   }
 
-  Future<void> loadModel() async {
+  Future<void> _loadModel() async {
     try {
-      interpreter = await Interpreter.fromAsset('assets/model_padi.tflite');
-      final labelData = await rootBundle.loadString('assets/labels.txt');
-      labels = labelData.split('\n').where((e) => e.isNotEmpty).toList();
+      // Pastikan file model ada di folder assets/
+      _interpreter = await Interpreter.fromAsset('assets/model_padi.tflite');
+
+      // Membaca daftar label dari file assets/labels.txt
+      final labelText = await rootBundle.loadString('assets/labels.txt');
+      _labels = labelText.split('\n').where((e) => e.isNotEmpty).toList();
+
+      setState(() {}); 
     } catch (e) {
-      debugPrint("Error load model: $e");
+      debugPrint('Gagal load model: $e');
+      setState(() {
+        _hasilPrediksi = "Gagal memuat model";
+      });
     }
   }
 
-  Future<void> pickImage() async {
+  Future<void> _prediksiGambar() async {
     final picker = ImagePicker();
     final picked = await picker.pickImage(source: ImageSource.gallery);
+    
     if (picked != null) {
       final cropped = await ImageCropper().cropImage(
         sourcePath: picked.path,
         uiSettings: [
           AndroidUiSettings(
             toolbarTitle: 'Potong Gambar',
+            toolbarColor: Colors.green,
+            toolbarWidgetColor: Colors.white,
             initAspectRatio: CropAspectRatioPreset.square,
             lockAspectRatio: true,
           ),
         ],
       );
+      
       if (cropped != null) {
         setState(() {
-          imageFile = File(cropped.path);
-          isLoading = true;
+          _image = File(cropped.path);
+          _isLoading = true;
         });
-        runPrediction(imageFile!);
+        _runInference(_image!);
       }
     }
   }
 
-  void runPrediction(File file) {
+  Future<void> _runInference(File imageFile) async {
+    if (_interpreter == null) {
+      setState(() {
+        _hasilPrediksi = "Model belum siap";
+        _isLoading = false;
+      });
+      return;
+    }
+
     try {
-      final bytes = file.readAsBytesSync();
-      img.Image? original = img.decodeImage(bytes);
-      if (original == null) return;
+      // 1. Load dan Decode Gambar
+      final imageBytes = imageFile.readAsBytesSync();
+      final img.Image? originalImage = img.decodeImage(imageBytes);
+      if (originalImage == null) throw Exception("Gagal membaca gambar");
 
-      img.Image resized = img.copyResize(original, width: 224, height: 224);
-      var input = [List.generate(224, (y) => List.generate(224, (x) {
-        final p = resized.getPixel(x, y);
-        return [p.r / 255.0, p.g / 255.0, p.b / 255.0];
-      }))];
+      // 2. Resize Gambar ke 224x224
+      final img.Image resizedImage = img.copyResize(originalImage, width: 224, height: 224);
 
-      var output = List.generate(1, (_) => List.filled(9, 0.0));
-      interpreter?.run(input, output);
-      int idx = output[0].indexOf(output[0].reduce(max));
+      // 3. Konversi ke Input Tensor [1, 224, 224, 3] - Logika lebih ringkas
+      var input = [
+        List.generate(224, (y) => List.generate(224, (x) {
+          final pixel = resizedImage.getPixel(x, y);
+          return [pixel.r / 255.0, pixel.g / 255.0, pixel.b / 255.0];
+        }))
+      ];
+
+      // 4. Siapkan Output Tensor [1, jumlah_kelas]
+      var output = List.filled(1 * _labels.length, 0.0).reshape([1, _labels.length]);
+
+      // 5. Jalankan Prediksi
+      _interpreter!.run(input, output);
+
+      // 6. Ambil Skor Tertinggi - Logika lebih ringkas menggunakan reduce(max)
+      final List<double> results = List<double>.from(output[0]);
+      double maxScore = results.reduce(max);
+      int maxIndex = results.indexOf(maxScore);
 
       setState(() {
-        predictionText = "${labels[idx]} (${(output[0][idx] * 100).toStringAsFixed(1)}%)";
-        isLoading = false;
+        _hasilPrediksi = "${_labels[maxIndex]} (${(maxScore * 100).toStringAsFixed(1)}%)";
+        _isLoading = false;
       });
     } catch (e) {
-      setState(() => isLoading = false);
+      debugPrint("Error saat prediksi: $e");
+      setState(() {
+        _hasilPrediksi = "Error: $e";
+        _isLoading = false;
+      });
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Klasifikasi Penyakit Padi')),
-      body: SafeArea(
+      appBar: AppBar(
+        title: const Text('Rice Disease Classifier'),
+        backgroundColor: Colors.green,
+        foregroundColor: Colors.white,
+      ),
+      body: Center(
         child: SingleChildScrollView(
-          child: Center(
-            child: Column(
-              children: [
-                const SizedBox(height: 40),
-
-                imageFile != null
-                    ? Image.file(imageFile!, height: 200)
-                    : const Icon(Icons.image, size: 200, color: Colors.grey),
-
-                const SizedBox(height: 20),
-                Text(
-                  predictionText,
-                  style: const TextStyle(fontSize: 18),
-                  textAlign: TextAlign.center,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // Tampilan Gambar
+              Container(
+                width: 300,
+                height: 300,
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.green, width: 2),
+                  borderRadius: BorderRadius.circular(15),
+                  color: Colors.grey[100],
                 ),
-
-                const SizedBox(height: 20),
-                ElevatedButton(
-                  onPressed: pickImage,
-                  child: const Text('Pilih Gambar'),
+                child: _image == null
+                    ? const Center(child: Text('Belum ada gambar'))
+                    : ClipRRect(
+                        borderRadius: BorderRadius.circular(13),
+                        child: Image.file(_image!, fit: BoxFit.cover),
+                      ),
+              ),
+              const SizedBox(height: 30),
+              
+              // Hasil Prediksi
+              if (_isLoading)
+                const CircularProgressIndicator()
+              else
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Text(
+                    _hasilPrediksi,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.green,
+                    ),
+                  ),
                 ),
-
-                const SizedBox(height: 40),
-              ],
-            ),
+              const SizedBox(height: 40),
+              
+              // Tombol
+              ElevatedButton.icon(
+                onPressed: _isLoading ? null : _prediksiGambar,
+                icon: const Icon(Icons.photo_library),
+                label: const Text("Pilih Gambar & Prediksi"),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
+                  textStyle: const TextStyle(fontSize: 16),
+                ),
+              ),
+            ],
           ),
         ),
       ),
